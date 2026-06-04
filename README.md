@@ -1,9 +1,9 @@
-# Height Measurements for elmap RL Controller
+# Height Measurements for Extreme-Parkour-Onboard
 
-本包提供四足机器人 elmap RL controller 使用的高程观测工具链：
+本包提供四足机器人 Extreme-Parkour-Onboard parkour policy 使用的高程观测工具链：
 
 - 离线：把室内 `.pcd` 点云地图转换为规则二维全局高程图。
-- 在线：C++ ROS2 节点读取 `.npy + metadata.yaml`，根据机器人全局 odometry 发布 11x7=77 维 `/height_measurements`。
+- 在线：C++ ROS2 节点读取 `.npy + metadata.yaml`，根据机器人全局 odometry 发布 12x11=132 维 `/heightmap_points`。
 - 验证：Python 采样器和单点查询脚本用于检查坐标系、采样顺序和公式。
 
 ## 1. 安装依赖
@@ -117,9 +117,10 @@ ros2 run height_measurements height_measurement_node \
   -p odom_topic:=/aft_mapped_in_map \
   -p map_frame:=map \
   -p base_frame:=base_link \
-  -p publish_topic:=/height_measurements \
+  -p publish_topic:=/heightmap_points \
   -p publish_rate:=50.0 \
-  -p height_formula:=terrain_minus_base \
+  -p height_formula:=legged_gym \
+  -p measured_height_offset:=0.3 \
   -p base_to_odom_x:=0.16266 \
   -p base_to_odom_y:=0.0 \
   -p base_to_odom_z:=0.11703
@@ -134,9 +135,10 @@ ros2 launch height_measurements height_measurement.launch.py \
   odom_topic:=/aft_mapped_in_map \
   map_frame:=map \
   base_frame:=base_link \
-  publish_topic:=/height_measurements \
+  publish_topic:=/heightmap_points \
   publish_rate:=50.0 \
-  height_formula:=terrain_minus_base \
+  height_formula:=legged_gym \
+  measured_height_offset:=0.3 \
   base_to_odom_x:=0.16266 \
   base_to_odom_y:=0.0 \
   base_to_odom_z:=0.11703
@@ -179,10 +181,10 @@ base_z = odom_z - base_to_odom_z
 - `base_minus_terrain`：`h = robot_z - terrain_z`
 - `legged_gym`：`h = robot_z - measured_height_offset - terrain_z`
 
-如果 controller 的 observation 定义与训练不同，修改启动参数即可：
+默认对齐 Extreme-Parkour-Onboard / legged_gym 训练公式：
 
 ```bash
--p height_formula:=legged_gym -p measured_height_offset:=0.5
+-p height_formula:=legged_gym -p measured_height_offset:=0.3
 ```
 
 输出默认裁剪到 `[-1.0, 1.0]`，可用 `clip_min` / `clip_max` 调整。
@@ -206,8 +208,8 @@ ros2 run tf2_ros tf2_echo map base_link
 检查输出：
 
 ```bash
-ros2 topic echo /height_measurements --once
-ros2 topic hz /height_measurements
+ros2 topic echo /heightmap_points --once
+ros2 topic hz /heightmap_points
 ```
 
 查询单点高度：
@@ -222,20 +224,20 @@ python3 tools/query_height_at.py \
 
 ## 7. 为什么在线不用 PCD 查询
 
-在线阶段不读取原始 PCD。PCD 查询需要点云搜索，复杂度高，也容易引入动态内存和延迟抖动。高程图查询是 O(1) 数组访问，每帧只查 77 个格点，更适合 50Hz / 100Hz 的 RL controller 实时运行。
+在线阶段不读取原始 PCD。PCD 查询需要点云搜索，复杂度高，也容易引入动态内存和延迟抖动。高程图查询是 O(1) 数组访问，每帧只查 132 个格点，更适合 50Hz / 100Hz 的 RL controller 实时运行。
 
 ## 8. 采样顺序
 
 默认采样点：
 
 ```python
-x_points = np.arange(-0.5, 0.5 + 1e-6, 0.1)  # 11
-y_points = np.arange(-0.3, 0.3 + 1e-6, 0.1)  # 7
+x_points = np.array([-0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2])  # 12
+y_points = np.array([-0.75, -0.6, -0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75])  # 11
 xx, yy = np.meshgrid(x_points, y_points, indexing="ij")
 local_points = np.stack([xx.reshape(-1), yy.reshape(-1)], axis=1)
 ```
 
-因此输出顺序是：每个 `x` 从 `-0.5` 到 `0.5`，在每个 `x` 下 `y` 从 `-0.3` 到 `0.3`，总长度 77。
+因此输出顺序是：每个 `x` 从 `-0.45` 到 `1.2`，在每个 `x` 下 `y` 从 `-0.75` 到 `0.75`，总长度 132。该顺序对齐 `/home/rc_kfs/Extreme-Parkour-Onboard/legged_gym/envs/base/legged_robot_config.py` 里的 `measured_points_x/y` 和 `np.meshgrid(..., indexing="ij")`。
 
 ## 9. 自检
 
@@ -245,14 +247,14 @@ python3 -m unittest discover -s tests
 
 自检覆盖：
 
-- `x_points=11`，`y_points=7`，`local_points=77`
+- `x_points=12`，`y_points=11`，`local_points=132`
 - `world_to_grid` / `grid_to_world`
-- `sample()` 输出 `(77,)`
-- `sample_as_grid` 输出 `(11, 7)`
+- `sample()` 输出 `(132,)`
+- `sample_as_grid` 输出 `(12, 11)`
 - `yaw=0` 和 `yaw=pi/2` 的采样方向
 
 ## 10. controller 维度兼容
 
-本包发布 77 维高度。`elmap-rl-controller/deploy_cpp` 也需要编译期维度、YAML 配置和 JIT policy 输入维度一致。
+本包发布 132 维高度。`Extreme-Parkour-Onboard/run_extreme_parkour_heightmap.py` 默认订阅 `/heightmap_points`，并按 `--n_points 132` 校验输入。
 
-如果 controller 或 JIT policy 是按其他高度网格训练的，不能直接混用 77 维高度观测，否则 CSE observation 维度会变化。请使用按 11x7 高度网格训练并导出的 `adaptation_module_latest.jit` / `body_latest.jit`。
+如果 controller 或 JIT policy 是按其他高度网格训练的，不能直接混用 132 维高度观测，否则 observation 维度和 scan encoder 输入都会变化。当前目标 policy 的观测日志显示：`n_proprio=53`、`n_points=132`、`scan_heights` 在 obs 的 `[53, 185)`。

@@ -42,11 +42,17 @@ class LocalHeightSamplerTest(unittest.TestCase):
     def test_default_points_shape(self):
         tmp, sampler = self.make_sampler()
         self.addCleanup(tmp.cleanup)
-        self.assertEqual(len(sampler.x_points), 11)
-        self.assertEqual(len(sampler.y_points), 7)
-        self.assertEqual(sampler.local_points.shape, (77, 2))
-        np.testing.assert_allclose(sampler.x_points, np.arange(-0.5, 0.5 + 1e-6, 0.1))
-        np.testing.assert_allclose(sampler.y_points, np.arange(-0.3, 0.3 + 1e-6, 0.1))
+        self.assertEqual(len(sampler.x_points), 12)
+        self.assertEqual(len(sampler.y_points), 11)
+        self.assertEqual(sampler.local_points.shape, (132, 2))
+        np.testing.assert_allclose(
+            sampler.x_points,
+            [-0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2],
+        )
+        np.testing.assert_allclose(
+            sampler.y_points,
+            [-0.75, -0.6, -0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75],
+        )
 
     def test_world_grid_round_trip(self):
         tmp, sampler = self.make_sampler()
@@ -63,8 +69,8 @@ class LocalHeightSamplerTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         flat = sampler.sample(0.0, 0.0, 0.5, 0.0)
         grid = sampler.sample(0.0, 0.0, 0.5, 0.0, sample_as_grid=True)
-        self.assertEqual(flat.shape, (77,))
-        self.assertEqual(grid.shape, (11, 7))
+        self.assertEqual(flat.shape, (132,))
+        self.assertEqual(grid.shape, (12, 11))
         self.assertEqual(flat.dtype, np.float32)
         self.assertEqual(grid.dtype, np.float32)
 

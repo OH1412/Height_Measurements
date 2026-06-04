@@ -26,8 +26,8 @@ class LocalHeightSampler:
         x_points: Optional[Iterable[float]] = None,
         y_points: Optional[Iterable[float]] = None,
         default_height: float = 0.0,
-        height_formula: str = "terrain_minus_base",
-        measured_height_offset: float = 0.5,
+        height_formula: str = "legged_gym",
+        measured_height_offset: float = 0.3,
     ) -> None:
         self.heightmap_path = Path(heightmap_path)
         self.metadata_path = Path(metadata_path)
@@ -61,12 +61,18 @@ class LocalHeightSampler:
         self.x_points = (
             np.asarray(list(x_points), dtype=np.float64)
             if x_points is not None
-            else np.arange(-0.5, 0.5 + 1e-6, 0.1, dtype=np.float64)
+            else np.asarray(
+                [-0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2],
+                dtype=np.float64,
+            )
         )
         self.y_points = (
             np.asarray(list(y_points), dtype=np.float64)
             if y_points is not None
-            else np.arange(-0.3, 0.3 + 1e-6, 0.1, dtype=np.float64)
+            else np.asarray(
+                [-0.75, -0.6, -0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75],
+                dtype=np.float64,
+            )
         )
         if self.x_points.ndim != 1 or self.y_points.ndim != 1:
             raise ValueError("x_points and y_points must be 1D")
